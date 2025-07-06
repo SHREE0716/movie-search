@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movie Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-6 font-sans transition-colors duration-300" id="appBody">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-indigo-400">🎬 Search Movies</h1>
+      <div class="flex gap-3 items-center">
+        <button onclick="toggleTheme()" class="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600 transition">🌓</button>
+        <button onclick="window.location.href='favorites.html'" class="bg-indigo-500 px-4 py-2 rounded hover:bg-indigo-600 transition text-white">⭐ Favorites</button>
+        <button onclick="logout()" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600 transition text-white">Logout</button>
+      </div>
+    </div>
+
+    <!-- Search Form -->
+    <form id="searchForm" class="flex gap-4 mb-6">
+      <input type="text" id="searchInput" placeholder="Enter movie title..."
+             class="flex-1 px-4 py-3 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
+      <button type="submit"
+              class="bg-indigo-500 px-6 py-3 rounded-md hover:bg-indigo-600 text-white transition">Search</button>
+    </form>
+
+    <!-- Recommended Section -->
+    <h2 class="text-xl font-semibold mt-10 mb-4 text-indigo-400">🎯 Recommended Movies</h2>
+    <div id="recommendedList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-10"></div>
+
+    <!-- Results -->
+    <div id="searchResults" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"></div>
+  </div>
+
+  <!-- ✅ Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white py-2 px-4 rounded shadow hidden z-50 transition duration-300"></div>
+
+  <script>
+    const token = localStorage.getItem("token");
+    if (!token) window.location.href = "index.html";
+
+    const searchForm = document.getElementById("searchForm");
+    const searchInput = document.getElementById("searchInput");
+    const searchResults = document.getElementById("searchResults");
+    const savedSet = new Set();
+
+    searchForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = searchInput.value.trim();
+      if (!query) return;
+      searchResults.innerHTML = "<p class='text-indigo-300'>🔍 Searching...</p>";
+
+      try {
+        const res = await fetch(`http://www.omdbapi.com/?apikey=ea91b772&s=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        if (data.Response === "True") {
+          searchResults.innerHTML = data.Search.map(movie => {
+            const safeId = movie.Title.replace(/[^a-zA-Z0-9]/g, '');
+            return `
+              <div class="bg-gray-800 p-4 rounded-lg shadow text-center relative">
+                <img src="${movie.Poster !== "N/A" ? movie.Poster : 'https://via.placeholder.com/150'}"
+                     alt="${movie.Title}" class="w-full h-72 object-cover rounded mb-2" />
+                <h3 class="text-lg font-semibold text-indigo-300">${movie.Title}</h3>
+                <p class="text-sm text-gray-400 mb-2">${movie.Year}</p>
+                <button onclick="toggleFavorite('${movie.Title.replace(/'/g, "\'")}', '${movie.Poster}', '${movie.Year}', '${safeId}')"
+                        class="absolute bottom-4 right-4 text-2xl" id="heart-${safeId}">🤍</button>
+              </div>
+            `;
+          }).join("");
+        } else {
+          searchResults.innerHTML = `<p class="text-red-400">❌ No results found</p>`;
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("❌ Server error");
+      }
+    });
+
+    async function toggleFavorite(title, poster, year, safeId) {
+      const heart = document.getElementById("heart-" + safeId);
+      if (savedSet.has(safeId)) return;
+
+      try {
+        const res = await fetch("http://localhost:5000/api/favorites", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({ title, poster, year }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          heart.textContent = "❤️";
+          savedSet.add(safeId);
+          showToast("✅ Saved to favorites");
+        } else {
+          showToast("❌ " + (data.message || "Could not save"));
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("❌ Server error");
+      }
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.classList.toggle("dark");
+    }
+
+    function logout() {
+      localStorage.removeItem("token");
+      window.location.href = "index.html";
+    }
+
+    // ✅ Load recommended movies on page load
+    const recommendedTitles = [
+      "Inception",
+      "Interstellar",
+      "The Matrix",
+      "The Dark Knight",
+      "Avengers: Endgame",
+      "Titanic"
+    ];
+
+    async function loadRecommendedMovies() {
+      const container = document.getElementById("recommendedList");
+      container.innerHTML = "Loading recommendations...";
+
+      const movies = await Promise.all(recommendedTitles.map(async title => {
+        const res = await fetch(`https://www.omdbapi.com/?apikey=ea91b772&t=${encodeURIComponent(title)}`);
+        return await res.json();
+      }));
+
+      container.innerHTML = movies.map(movie => `
+        <div class="bg-gray-800 text-white p-4 rounded shadow text-center">
+          <img src="${movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/150'}"
+               class="w-full h-64 object-cover rounded mb-2" />
+          <h3 class="text-lg font-semibold text-indigo-300">${movie.Title}</h3>
+          <p class="text-sm text-gray-400">${movie.Year}</p>
+        </div>
+      `).join('');
+    }
+
+    loadRecommendedMovies();
+  </script>
+</body>
+</html>

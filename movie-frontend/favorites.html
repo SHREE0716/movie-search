@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Favorites</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-6 font-sans transition-colors duration-300" id="appBody">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold text-indigo-400">⭐ My Favorite Movies</h1>
+      <div class="flex gap-3 items-center">
+        <button onclick="toggleTheme()"
+                class="bg-gray-700 px-3 py-2 rounded hover:bg-gray-600 transition text-white">🌓</button>
+        <button onclick="window.location.href='search.html'"
+                class="bg-indigo-500 px-4 py-2 rounded hover:bg-indigo-600 transition text-white">🔍 Back to Search</button>
+      </div>
+    </div>
+
+    <!-- Favorite List -->
+    <div id="favoritesList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white py-2 px-4 rounded shadow hidden z-50 transition duration-300"></div>
+
+  <script>
+    const token = localStorage.getItem("token");
+    if (!token) window.location.href = "index.html";
+
+    const favoritesList = document.getElementById("favoritesList");
+
+    async function fetchFavorites() {
+      try {
+        const res = await fetch("http://localhost:5000/api/favorites", {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          favoritesList.innerHTML = data.map(movie => `
+            <div class="bg-gray-800 p-4 rounded-lg shadow text-center relative">
+              <img src="${movie.poster !== 'N/A' ? movie.poster : 'https://via.placeholder.com/150'}"
+                   alt="${movie.title}" class="w-full h-72 object-cover rounded mb-2" />
+              <h3 class="text-lg font-semibold text-indigo-300">${movie.title}</h3>
+              <p class="text-sm text-gray-400 mb-2">${movie.year}</p>
+              <button onclick="removeFavorite('${movie._id}')"
+                      class="absolute bottom-4 right-4 text-xl hover:text-red-500 transition">🗑</button>
+            </div>
+          `).join("");
+        } else {
+          favoritesList.innerHTML = `<p class='text-red-400'>❌ Could not fetch favorites.</p>`;
+        }
+      } catch (err) {
+        console.error(err);
+        favoritesList.innerHTML = `<p class='text-red-400'>❌ Server error</p>`;
+      }
+    }
+
+    async function removeFavorite(id) {
+      try {
+        const res = await fetch(`http://localhost:5000/api/favorites/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          showToast("✅ Removed from favorites");
+          fetchFavorites();
+        } else {
+          showToast("❌ Failed to remove");
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("❌ Server error");
+      }
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle("dark");
+    }
+
+    fetchFavorites();
+  </script>
+</body>
+</html>

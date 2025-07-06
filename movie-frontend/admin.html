@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen font-sans p-6 transition duration-300" id="adminBody">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold text-indigo-400">🔐 Admin Dashboard</h1>
+      <button onclick="toggleTheme()" class="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition">🌓 Theme</button>
+    </div>
+
+    <!-- Users Section -->
+    <div class="mb-10">
+      <h2 class="text-2xl font-semibold text-indigo-300 mb-3">👥 All Users</h2>
+      <button onclick="fetchUsers()" class="mb-4 bg-indigo-500 px-4 py-2 rounded hover:bg-indigo-600 transition">🔄 Refresh Users</button>
+      <div id="usersList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"></div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem("token");
+    if (!token) window.location.href = "index.html";
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle("dark");
+    }
+
+    async function fetchUsers() {
+      const usersList = document.getElementById("usersList");
+      usersList.innerHTML = "<p class='text-indigo-300'>Loading users...</p>";
+      try {
+        const res = await fetch("http://localhost:5000/api/admin/users", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const users = await res.json();
+
+        if (res.ok) {
+          usersList.innerHTML = users.map(user => `
+            <div class="bg-gray-800 p-4 rounded shadow">
+              <p><strong>Username:</strong> ${user.username}</p>
+              <p><strong>Email:</strong> ${user.email}</p>
+              <p><strong>Admin:</strong> ${user.isAdmin ? '✅' : '❌'}</p>
+              <button onclick="fetchUserFavorites('${user._id}', this)" class="mt-2 bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">🎬 Show Favorites</button>
+              <div id="favorites-${user._id}" class="mt-4 space-y-2 hidden"></div>
+            </div>
+          `).join("");
+        } else {
+          usersList.innerHTML = `<p class="text-red-400">❌ Failed to load users</p>`;
+        }
+      } catch (err) {
+        console.error(err);
+        usersList.innerHTML = `<p class="text-red-400">❌ Server error</p>`;
+      }
+    }
+
+    async function fetchUserFavorites(userId, button) {
+      const favoritesDiv = document.getElementById(`favorites-${userId}`);
+      if (!favoritesDiv.classList.contains('hidden')) {
+        favoritesDiv.classList.add('hidden');
+        button.textContent = "🎬 Show Favorites";
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://localhost:5000/api/admin/user/${userId}/favorites`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const favorites = await res.json();
+
+        if (res.ok) {
+          if (favorites.length === 0) {
+            favoritesDiv.innerHTML = `<p class="text-gray-400">No favorites found</p>`;
+          } else {
+            favoritesDiv.innerHTML = favorites.map(movie => `
+              <div class="bg-gray-700 p-2 rounded text-sm">
+                <p><strong>${movie.title}</strong> (${movie.year})</p>
+              </div>
+            `).join("");
+          }
+          favoritesDiv.classList.remove('hidden');
+          button.textContent = "⬆️ Hide Favorites";
+        } else {
+          favoritesDiv.innerHTML = `<p class="text-red-400">Failed to fetch favorites</p>`;
+          favoritesDiv.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error(err);
+        favoritesDiv.innerHTML = `<p class="text-red-400">Server error</p>`;
+        favoritesDiv.classList.remove('hidden');
+      }
+    }
+
+    fetchUsers();
+  </script>
+</body>
+</html>
